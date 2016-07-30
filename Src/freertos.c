@@ -62,10 +62,6 @@ void StartDefaultTask(void const * argument);
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
 /* USER CODE BEGIN FunctionPrototypes */
-
-/* USER CODE END FunctionPrototypes */
-
-/* Hook prototypes */
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 {
 	uartTxCompleteCallback(&connection);
@@ -94,6 +90,9 @@ void MQTTCallbek()
 {
 
 }
+/* USER CODE END FunctionPrototypes */
+
+/* Hook prototypes */
 
 /* Init FreeRTOS */
 
@@ -131,6 +130,8 @@ void MX_FREERTOS_Init(void) {
 /* StartDefaultTask function */
 void StartDefaultTask(void const * argument)
 {
+
+  /* USER CODE BEGIN StartDefaultTask */
 	const char* id = "stm32BABY";
 	const char* user = "";
 	const char* pass = "";
