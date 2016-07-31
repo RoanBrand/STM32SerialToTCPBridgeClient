@@ -1,3 +1,9 @@
 Drivers/
 Debug/
 Middlewares/
+.settings/
+STM32F334R8_FLASH.ld
+.cproject
+.mxproject
+.project.bak
+STM32SerialToTCPBridgeClient.elf.launch
