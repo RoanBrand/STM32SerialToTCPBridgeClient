@@ -42,7 +42,9 @@ static bool readPacket(Client* c)
 	for (i = 2; i <= c->workBuffer[0]; i++)
 	{
 		if (!rx_read(c, &c->workBuffer[i]))
+		{
 			return false;
+		}
 	}
 
 	// Integrity checking
@@ -50,8 +52,9 @@ static bool readPacket(Client* c)
 	uint32_t crcCode = HAL_CRC_Calculate(c->peripheral_CRC, (uint32_t*)(c->workBuffer), i - 4);
 	crcCode = crcCode ^ 0xffffffff;
 	if (crc != crcCode)
+	{
 		return false;
-
+	}
 	return true;
 }
 
@@ -101,12 +104,12 @@ static bool publish(Client* c, uint8_t* payload, uint8_t pLength)
 
 	return true;
 }
-
+/*
 static bool writeByte(Client* c, uint8_t* byte)
 {
 	return publish(c, byte, 1);
 }
-
+*/
 // Public Methods
 static int availablePublic(const void* c)
 {
@@ -204,39 +207,30 @@ static void loopPublic(const void* c)
 			{
 				// Message from PC
 				case PROTOCOL_PUBLISH:
-				if (rxSeqFlag == self->expectedRxSeqFlag)
-				{
-					self->expectedRxSeqFlag = !self->expectedRxSeqFlag;
+					if (rxSeqFlag == self->expectedRxSeqFlag)
+					{
+						self->expectedRxSeqFlag = !self->expectedRxSeqFlag;
 
-          if (self->workBuffer[0] > 5)
-          {
-            for (uint8_t i = 0; i < self->workBuffer[0] - 5; i++)
-            {
-            	self->readBuffer[self->pRx_read++] = self->workBuffer[2 + i];
-            }
-            self->readFull = (self->pRead_read == self->pRx_read);
-          }
-
-						// DEBUG LED
-						if (self->workBuffer[2] == 0x31)
+						if (self->workBuffer[0] > 5)
 						{
-							HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_SET);
-						} else if (self->workBuffer[2] == 0x32)
-						{
-							HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);
+							for (uint8_t i = 0; i < self->workBuffer[0] - 5; i++)
+							{
+								self->readBuffer[self->pRx_read++] = self->workBuffer[2 + i];
+							}
+							self->readFull = (self->pRead_read == self->pRx_read);
 						}
-				}
-				writePacket(self, PROTOCOL_ACK | (self->workBuffer[1] & 0x80), NULL, 0);
-				break;
+					}
+					writePacket(self, PROTOCOL_ACK | (self->workBuffer[1] & 0x80), NULL, 0);
+					break;
 
 				// ACK from PC
 				case PROTOCOL_ACK:
-				if (rxSeqFlag == self->sequenceTxFlag)
-				{
-					self->sequenceTxFlag = !self->sequenceTxFlag;
-					self->ackOutstanding = false;
-				}
-				break;
+					if (rxSeqFlag == self->sequenceTxFlag)
+					{
+						self->sequenceTxFlag = !self->sequenceTxFlag;
+						self->ackOutstanding = false;
+					}
+					break;
 			}
 		}
 	}
