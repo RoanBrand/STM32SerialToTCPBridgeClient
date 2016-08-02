@@ -60,6 +60,7 @@ static bool readPacket(Client* c)
 
 static bool writePacket(Client* c, uint8_t command, uint8_t* payload, uint8_t pLength)
 {
+	while (!c->txReady) {}
 	c->workBuffer[0] = pLength + 5;
 	c->workBuffer[1] = command;
 	if (payload != NULL)
@@ -76,16 +77,18 @@ static bool writePacket(Client* c, uint8_t command, uint8_t* payload, uint8_t pL
 	c->workBuffer[pLength + 3] = (crcCode & 0x0000FF00) >> 8;
 	c->workBuffer[pLength + 4] = (crcCode & 0x00FF0000) >> 16;
 	c->workBuffer[pLength + 5] = (crcCode & 0xFF000000) >> 24;
-	while (!c->txReady) {}
-	HAL_UART_Transmit_IT(c->peripheral_UART, c->workBuffer, pLength + 6);
+
+	HAL_StatusTypeDef txStatus = HAL_UART_Transmit_IT(c->peripheral_UART, c->workBuffer, pLength + 6);
 	c->txReady = false;
-	return true;
+	return (txStatus == HAL_OK);
 }
 
-static bool publish(Client* c, uint8_t* payload, uint8_t pLength)
+static size_t publish(Client* c, uint8_t* payload, uint8_t pLength)
 {
 	if (c->ackOutstanding)
+	{
 		return false;
+	}
 
 	c->ackOutstanding = true;
 
@@ -94,15 +97,12 @@ static bool publish(Client* c, uint8_t* payload, uint8_t pLength)
 	{
 		cmdSequence |= 0x80;
 	}
-	/* NOT NECESSARY AS WILL RESULT IN 0 ANYWAY
-	else
+	if (!writePacket(c, cmdSequence, payload, pLength))
 	{
-	cmdSequence &= 0x7F;
-	}*/
-	if (!writePacket(((Client*)c), cmdSequence, payload, pLength))
-		return false;
+		return 0;
+	}
 
-	return true;
+	return pLength;
 }
 /*
 static bool writeByte(Client* c, uint8_t* byte)
@@ -183,7 +183,7 @@ static void stopPublic(const void* c)
 	;
 }
 
-static bool writePublic(const void* c, uint8_t* payload, uint8_t pLength)
+static size_t writePublic(const void* c, uint8_t* payload, uint8_t pLength)
 {
 	return publish(((Client*)c), payload, pLength);
 }

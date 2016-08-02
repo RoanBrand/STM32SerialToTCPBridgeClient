@@ -52,7 +52,7 @@ typedef struct Client_t
 	uint8_t (*connected)(const void*);
 	int (*available)(const void*);
 	int (*read)(const void*);
-	bool (*write)(const void*, uint8_t* payload, uint8_t pLength);
+	size_t (*write)(const void*, uint8_t* payload, uint8_t pLength);
 	void (*flush)(const void*); // wait until all sent
 	void (*stop)(const void*);
 } Client;
