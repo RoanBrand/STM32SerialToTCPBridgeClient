@@ -322,7 +322,7 @@ static boolean MQTTpublishPublic(const void* c, const char* topic, const uint8_t
             return false;
         }
         // Leave room in the buffer for header and variable length field
-        uint16_t length = 5;HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
+        uint16_t length = 5;
         length = MQTTwriteString(topic,self->buffer,length);
         uint16_t i;
         for (i=0;i<plength;i++) {
@@ -360,7 +360,7 @@ static boolean MQTTsubscribe(const void* c, const char* topic, uint8_t qos) {
         self->buffer[length++] = (self->nextMsgId & 0xFF);
         length = MQTTwriteString((char*)topic, self->buffer,length);
         self->buffer[length++] = qos;
-        return MQTTwrite(self, MQTTSUBSCRIBE|MQTTQOS1,self->buffer,length-5);
+        return MQTTwrite(self, MQTTSUBSCRIBE|MQTTQOS1, self->buffer, length-5);
     }
     return false;
 }

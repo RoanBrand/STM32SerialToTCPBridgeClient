@@ -50,10 +50,10 @@ osThreadId defaultTaskHandle;
 /* USER CODE BEGIN Variables */
 Client connection;
 PubSubClient mqttConnection;
-bool sendPackToPC;
+bool buttonPressed;
 const char* topic = "stm32f334";
+const char* subscribeTopic = "#";
 const char* pcMessage = "Hello i5! I am a STM32F3!\n";
-
 /* USER CODE END Variables */
 
 /* Function prototypes -------------------------------------------------------*/
@@ -80,15 +80,25 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
     uint32_t now = HAL_GetTick();
     if (now - debounce > 200)
     {
-      sendPackToPC = true;
+      buttonPressed = true;
       debounce = now;
     }
   }
 }
 
-void MQTTCallbek()
+void MQTTCallbek(char* topic, uint8_t* payload, unsigned int length)
 {
-
+	if (length == 1)
+	{
+		// DEBUG LED
+		if (payload[0] == 0x31)
+		{
+			HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_SET);
+		} else if (payload[0] == 0x32)
+		{
+			HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);
+		}
+	}
 }
 /* USER CODE END FunctionPrototypes */
 
@@ -142,15 +152,23 @@ void StartDefaultTask(void const * argument)
 	uint8_t address[4] = {127, 0, 0, 1};
 	newPubSubClient(&mqttConnection, address, 1883, MQTTCallbek, &connection);
 	bool connectedAfter = false;
+	bool subscribeAfter = false;
   /* Infinite loop */
 	for(;;)
 	{
 		connection.loop(&connection);
 
-		if (sendPackToPC)
+		if (buttonPressed)
 		{
-			sendPackToPC = false;
-			mqttConnection.publish(&mqttConnection, topic, (const uint8_t*)pcMessage, strlen(pcMessage), false);
+			buttonPressed = false;
+			if (!subscribeAfter)
+			{
+				subscribeAfter = true;
+				mqttConnection.subscribe(&mqttConnection, subscribeTopic, 0);
+			} else
+			{
+				mqttConnection.publish(&mqttConnection, topic, (const uint8_t*)pcMessage, strlen(pcMessage), false);
+			}
 		}
 
 		if (!connectedAfter)
