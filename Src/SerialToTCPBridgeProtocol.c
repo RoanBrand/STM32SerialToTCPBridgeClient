@@ -79,8 +79,13 @@ static bool writePacket(Client* c, uint8_t command, uint8_t* payload, uint8_t pL
 	c->workBuffer[pLength + 5] = (crcCode & 0xFF000000) >> 24;
 
 	HAL_StatusTypeDef txStatus = HAL_UART_Transmit_IT(c->peripheral_UART, c->workBuffer, pLength + 6);
-	c->txReady = false;
-	return (txStatus == HAL_OK);
+	if (txStatus == HAL_OK)
+	{
+		c->txReady = false;
+		return true;
+	}
+
+	return false;
 }
 
 static size_t publish(Client* c, uint8_t* payload, uint8_t pLength)
