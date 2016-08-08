@@ -149,15 +149,14 @@ void StartDefaultTask(void const * argument)
 	const char* willMsg = "";
 
 	newClient(&connection, &huart2, &hcrc);
-	uint8_t address[4] = {127, 0, 0, 1};
+	uint8_t address[4] = {127, 0, 0, 1}; // MQTT Broker on host PC on port 1883
 	newPubSubClient(&mqttConnection, address, 1883, MQTTCallbek, &connection);
 	bool connectedAfter = false;
 	bool subscribeAfter = false;
   /* Infinite loop */
 	for(;;)
 	{
-		connection.loop(&connection);
-
+		// User application example
 		if (buttonPressed)
 		{
 			buttonPressed = false;
