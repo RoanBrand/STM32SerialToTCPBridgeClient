@@ -51,9 +51,6 @@ osThreadId defaultTaskHandle;
 Client connection;
 PubSubClient mqttConnection;
 bool buttonPressed;
-const char* topic = "stm32f334";
-const char* subscribeTopic = "#";
-const char* pcMessage = "Hello i5! I am a STM32F3!\n";
 /* USER CODE END Variables */
 
 /* Function prototypes -------------------------------------------------------*/
@@ -142,11 +139,21 @@ void StartDefaultTask(void const * argument)
 {
 
   /* USER CODE BEGIN StartDefaultTask */
+	/****************************
+	 * User Application Example *
+	 ****************************/
+
+	// MQTT Connection details
 	const char* id = "stm32BABY";
 	const char* user = "";
 	const char* pass = "";
 	const char* willTopic = "";
 	const char* willMsg = "";
+
+	// MQTT Message info
+	const char* publishTopic = "stm32f334";
+	const char* subscribeTopic = "led/#";
+	const char* publishMsg = "Hello i5! I am a STM32F3!\n";
 
 	newClient(&connection, &huart2, &hcrc);
 	uint8_t address[4] = {127, 0, 0, 1}; // MQTT Broker on host PC on port 1883
@@ -156,7 +163,11 @@ void StartDefaultTask(void const * argument)
   /* Infinite loop */
 	for(;;)
 	{
-		// User application example
+		if (!connectedAfter)
+		{
+			connectedAfter = true;
+			mqttConnection.connect(&mqttConnection, id, user, pass, willTopic, 0, false, willMsg);
+		}
 		if (buttonPressed)
 		{
 			buttonPressed = false;
@@ -166,14 +177,9 @@ void StartDefaultTask(void const * argument)
 				mqttConnection.subscribe(&mqttConnection, subscribeTopic, 0);
 			} else
 			{
-				mqttConnection.publish(&mqttConnection, topic, (const uint8_t*)pcMessage, strlen(pcMessage), false);
+				mqttConnection.publish(&mqttConnection, publishTopic, (const uint8_t*)publishMsg, strlen(publishMsg), false);
 			}
-		}
 
-		if (!connectedAfter)
-		{
-			connectedAfter = true;
-			mqttConnection.connect(&mqttConnection, id, user, pass, willTopic, 0, false, willMsg);
 		}
 		mqttConnection.loop(&mqttConnection);
 	}

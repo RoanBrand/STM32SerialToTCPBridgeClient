@@ -1,4 +1,4 @@
-# STM32SerialToTCPBridgeClient
+# STM32 Serial To TCP Bridge Client
 STM32 based client for [SerialToTCPBridgeProtocol](https://github.com/RoanBrand/SerialToTCPBridgeProtocol) PC side service.
 
 Currently, there is a MQTT protocol implementation over this connection as an example.
@@ -17,7 +17,7 @@ The microcontroller is effectively making a connection to a MQTT broker over the
 - In Atollic, open the STM32CubeMX perspective.
 - Inside STM32CubeMX, open `STM32SerialToTCPBridgeClient.ioc` file. Click *Generate source code*.
 - In Atollic, open C/C++ perspective and click *Rebuild*.
-- With the STM32 Nucleo connected, click *Debug* then *Resume*, once in te Debug perspective.
+- With the STM32 Nucleo connected, click *Debug* then *Resume*, once in the Debug perspective.
 
 #### Details
 - The Go service opens a real TCP connection to a set destination on behalf of the STM32 Serial Client.
@@ -25,7 +25,8 @@ The microcontroller is effectively making a connection to a MQTT broker over the
 - FreeRTOS is used on the STM32.
 - A stripped down version of [knolleary's MQTT library for Arduino](https://github.com/knolleary/pubsubclient) is used.
 - When the microcontroller starts up it dials to a HiveMQ MQTT broker running on the host PC (127.0.0.1, 1883)
-- Pressing the button on the Nucleo board causes it to publish on a MQTT topic.
+- Pressing the button on the Nucleo board the first time causes it to subscribe to topic `led/#`. Subsequent presses publishes a message on another MQTT topic.
+- Publishing `1` from another MQTT client to the `led` topic will power on the led on the Nucleo board. Publishing `2` will power it off.
 
 #### Future plans
 - Sort out timeout bugs
