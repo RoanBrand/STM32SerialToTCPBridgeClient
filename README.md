@@ -22,7 +22,6 @@ The microcontroller is effectively making a connection to a MQTT broker over the
 #### Details
 - The Go service opens a real TCP connection to a set destination on behalf of the STM32 Serial Client.
 - The Protocol utilizes the internal CRC32 unit on the STM32 for communication error checking.
-- FreeRTOS is used on the STM32.
 - A stripped down version of [knolleary's MQTT library for Arduino](https://github.com/knolleary/pubsubclient) is used.
 - When the microcontroller starts up it dials to a HiveMQ MQTT broker running on the host PC (127.0.0.1, 1883)
 - Pressing the button on the Nucleo board the first time causes it to subscribe to topic `led/#`. Subsequent presses publishes a message on another MQTT topic.

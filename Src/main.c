@@ -32,26 +32,27 @@
   */
 /* Includes ------------------------------------------------------------------*/
 #include "stm32f3xx_hal.h"
-#include "cmsis_os.h"
 #include "crc.h"
 #include "usart.h"
 #include "gpio.h"
 
 /* USER CODE BEGIN Includes */
-
+#include <string.h>
+#include "PubSubClient.h"
 /* USER CODE END Includes */
 
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
-
+Client connection;
+PubSubClient mqttConnection;
+bool buttonPressed;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 void Error_Handler(void);
-void MX_FREERTOS_Init(void);
 
 /* USER CODE BEGIN PFP */
 /* Private function prototypes -----------------------------------------------*/
@@ -59,7 +60,44 @@ void MX_FREERTOS_Init(void);
 /* USER CODE END PFP */
 
 /* USER CODE BEGIN 0 */
+void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
+{
+	uartTxCompleteCallback(&connection);
+}
 
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+	uartRxCompleteCallback(&connection);
+}
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+  static uint32_t debounce;
+  if (GPIO_Pin == GPIO_PIN_13)
+  {
+    uint32_t now = HAL_GetTick();
+    if (now - debounce > 200)
+    {
+      buttonPressed = true;
+      debounce = now;
+    }
+  }
+}
+
+void MQTTCallbek(char* topic, uint8_t* payload, unsigned int length)
+{
+	if (length == 1)
+	{
+		// DEBUG LED
+		if (payload[0] == 0x31)
+		{
+			HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_SET);
+		} else if (payload[0] == 0x32)
+		{
+			HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);
+		}
+	}
+}
 /* USER CODE END 0 */
 
 int main(void)
@@ -83,26 +121,56 @@ int main(void)
   MX_USART2_UART_Init();
 
   /* USER CODE BEGIN 2 */
+	/****************************
+	 * User Application Example *
+	 ****************************/
 
+	// MQTT Connection details
+	const char* id = "stm32BABY";
+	const char* user = "";
+	const char* pass = "";
+	const char* willTopic = "";
+	const char* willMsg = "";
+
+	// MQTT Message info
+	const char* publishTopic = "stm32f334";
+	const char* subscribeTopic = "led/#";
+	const char* publishMsg = "Hello i5! I am a STM32F3!\n";
+
+	newClient(&connection, &huart2, &hcrc);
+	uint8_t address[4] = {127, 0, 0, 1}; // MQTT Broker on host PC on port 1883
+	newPubSubClient(&mqttConnection, address, 1883, MQTTCallbek, &connection);
+	bool connectedAfter = false;
+	bool subscribeAfter = false;
   /* USER CODE END 2 */
-
-  /* Call init function for freertos objects (in freertos.c) */
-  MX_FREERTOS_Init();
-
-  /* Start scheduler */
-  osKernelStart();
-  
-  /* We should never get here as control is now taken by the scheduler */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  while (1)
-  {
+	while (1)
+	{
   /* USER CODE END WHILE */
 
   /* USER CODE BEGIN 3 */
+		if (!connectedAfter)
+		{
+			connectedAfter = true;
+			mqttConnection.connect(&mqttConnection, id, user, pass, willTopic, 0, false, willMsg);
+		}
+		if (buttonPressed)
+		{
+			buttonPressed = false;
+			if (!subscribeAfter)
+			{
+				subscribeAfter = true;
+				mqttConnection.subscribe(&mqttConnection, subscribeTopic, 0);
+			} else
+			{
+				mqttConnection.publish(&mqttConnection, publishTopic, (const uint8_t*)publishMsg, strlen(publishMsg), false);
+			}
 
-  }
+		}
+		mqttConnection.loop(&mqttConnection);
+	}
   /* USER CODE END 3 */
 
 }
@@ -142,7 +210,7 @@ void SystemClock_Config(void)
   HAL_SYSTICK_CLKSourceConfig(SYSTICK_CLKSOURCE_HCLK);
 
   /* SysTick_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(SysTick_IRQn, 15, 0);
+  HAL_NVIC_SetPriority(SysTick_IRQn, 0, 0);
 }
 
 /* USER CODE BEGIN 4 */
