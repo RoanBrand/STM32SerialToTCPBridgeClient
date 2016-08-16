@@ -60,6 +60,8 @@ void Error_Handler(void);
 /* USER CODE END PFP */
 
 /* USER CODE BEGIN 0 */
+
+// Serial Protocol specific
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 {
 	uartTxCompleteCallback(&connection);
@@ -70,6 +72,12 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 	uartRxCompleteCallback(&connection);
 }
 
+void HAL_SYSTICK_Callback(void)
+{
+	tickInterupt(&connection);
+}
+
+// Application Example specific
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
   static uint32_t debounce;
@@ -141,7 +149,7 @@ int main(void)
 	uint8_t address[4] = {127, 0, 0, 1}; // MQTT Broker on host PC on port 1883
 	newPubSubClient(&mqttConnection, address, 1883, MQTTCallbek, &connection);
 	bool connectedAfter = false;
-	bool subscribeAfter = false;
+	bool subscribeOnce = false;
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -159,15 +167,12 @@ int main(void)
 		if (buttonPressed)
 		{
 			buttonPressed = false;
-			if (!subscribeAfter)
+			if (!subscribeOnce)
 			{
-				subscribeAfter = true;
+				subscribeOnce = true;
 				mqttConnection.subscribe(&mqttConnection, subscribeTopic, 0);
-			} else
-			{
-				mqttConnection.publish(&mqttConnection, publishTopic, (const uint8_t*)publishMsg, strlen(publishMsg), false);
 			}
-
+			mqttConnection.publish(&mqttConnection, publishTopic, (const uint8_t*)publishMsg, strlen(publishMsg), false);
 		}
 		mqttConnection.loop(&mqttConnection);
 	}

@@ -29,6 +29,10 @@
 #define RX_PACKET_GOTLENGTH 1
 #define RX_PACKET_GOTCOMMAND 2
 
+#define TX_IDLE 0
+#define TX_BUSY 1
+#define TX_WAIT 2
+
 // "class"
 typedef struct Client_t
 {
@@ -51,9 +55,8 @@ typedef struct Client_t
 	bool readFull;
 
 	uint8_t workBuffer[128];
-	bool txReady;
 	bool ackOutstanding;
-	bool sequenceTxFlag;
+	bool expectedAckSeq;
 	bool expectedRxSeqFlag;
 	uint32_t lastInAct, lastOutAct;
 	uint8_t state;
@@ -74,5 +77,6 @@ void newClient(Client*, UART_HandleTypeDef* uartUnit, CRC_HandleTypeDef* crcUnit
 // Callback hook ups
 void uartTxCompleteCallback(Client* c);
 void uartRxCompleteCallback(Client* c);
+void tickInterupt(Client* c);
 
 #endif /* SERIALTOTCPBRIDGEPROTOCOL_H_ */
