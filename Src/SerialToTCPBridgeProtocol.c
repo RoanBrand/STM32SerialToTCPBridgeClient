@@ -23,16 +23,35 @@ static int tx_available(Client* c)
 	}
 }
 
-static bool startTX(Client* c, bool timeout)
+static void startTX(Client* c, bool timeout, bool kickstart, bool ack)
 {
-	static uint8_t txState = TX_IDLE;
+	static volatile uint8_t txState = TX_IDLE;
 	static int packetLength;
 
-	if (timeout)
-	{
-		// Ack did not arrive in time, resend last pub
-		txState = TX_IDLE;
-	}
+    if (timeout)
+    {
+        if (txState == TX_WAIT)
+        {
+            // Ack did not arrive in time, resend last pub
+            txState = TX_IDLE;
+        } else
+        {
+            return;
+        }
+    }
+
+    if (kickstart && (txState != TX_IDLE))
+    {
+        return;
+    }
+
+    if (ack && (txState == TX_WAIT))
+    {
+    	c->pHead_tx += (uint8_t)packetLength;
+    	c->txFull = false;
+        txState = TX_IDLE;
+    }
+
 	switch (txState)
 	{
 	// Start sending the next packet
@@ -43,13 +62,13 @@ static bool startTX(Client* c, bool timeout)
 			if ((int)c->pHead_tx + packetLength > 256) // check if packet surpasses buffer end
 			{
 				if (HAL_UART_Transmit_IT(c->peripheral_UART, &c->txBuffer[c->pHead_tx], 256 - c->pHead_tx) != HAL_OK)
-					return false;
+					return; // TODO: react on this
 				c->lastOutAct = HAL_GetTick();
 				txState = TX_BUSY;
 			} else
 			{
 				if (HAL_UART_Transmit_IT(c->peripheral_UART, &c->txBuffer[c->pHead_tx], (uint16_t)packetLength) != HAL_OK)
-					return false;
+					return;
 				c->lastOutAct = HAL_GetTick();
 				if ((c->txBuffer[c->pHead_tx + 1] & 0x7F) == PROTOCOL_PUBLISH)
 				{
@@ -66,7 +85,7 @@ static bool startTX(Client* c, bool timeout)
 	// Complete sending of current packet
 	case TX_BUSY:
 		if (HAL_UART_Transmit_IT(c->peripheral_UART, c->txBuffer, packetLength + c->pHead_tx - 256) != HAL_OK)
-			return false;
+			return;
 		c->lastOutAct = HAL_GetTick();
 		if ((c->txBuffer[c->pHead_tx + 1] & 0x7F) == PROTOCOL_PUBLISH)
 		{
@@ -80,15 +99,8 @@ static bool startTX(Client* c, bool timeout)
 		}
 		break;
 	case TX_WAIT:
-		if (!c->ackOutstanding) // Ack received
-		{
-			c->pHead_tx += (uint8_t)packetLength;
-			txState = TX_IDLE;
-		}
-
 		break;
 	}
-	return true;
 }
 
 static bool writePacket(Client* c, uint8_t command, uint8_t* payload, uint8_t pLength)
@@ -112,7 +124,7 @@ static bool writePacket(Client* c, uint8_t command, uint8_t* payload, uint8_t pL
 	// see if packet will fit in transmit buffer
 	if ((int)(pLength) + 6 > 256 - tx_available(c))
 	{
-		return 0;
+		return false;
 	}
 
 	// write packet into transmit buffer
@@ -122,7 +134,9 @@ static bool writePacket(Client* c, uint8_t command, uint8_t* payload, uint8_t pL
 	}
 	c->txFull = (c->pTail_tx == c->pHead_tx);
 
-	return startTX(c, false);
+	startTX(c, false, true, false);
+
+	return true;
 }
 
 static size_t publish(Client* c, uint8_t* payload, uint8_t pLength)
@@ -178,7 +192,7 @@ static void rxHandlePacket(Client* c, uint8_t* packetStart)
 			if (rxSeqFlag == c->expectedAckSeq)
 			{
 				c->ackOutstanding = false;
-				startTX(c, false); // just to reset back to TX_IDLE
+                startTX(c, false, false, true);
 			}
 		}
 		break;
@@ -188,7 +202,7 @@ static void rxHandlePacket(Client* c, uint8_t* packetStart)
 // Callback hook ups
 void uartTxCompleteCallback(Client* c)
 {
-	startTX(c, false);
+    startTX(c, false, false, false);
 }
 
 // TODO: Packet RX timeout, buffer full check?
@@ -238,7 +252,7 @@ void tickInterupt(Client* c)
 		uint32_t now = HAL_GetTick();
 		if (now - c->lastOutAct > 500)
 		{
-			startTX(c, true);
+            startTX(c, true, false, false);
 		}
 	}
 }
