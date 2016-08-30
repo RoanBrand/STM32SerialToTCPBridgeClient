@@ -8,94 +8,86 @@
 #include "SerialToTCPBridgeProtocol.h"
 
 // Private Methods
-static int tx_available(Client* c)
-{
-	if (c->txFull)
-	{
-		return 256;
-	}
-	if (c->pTail_tx >= c->pHead_tx)
-	{
-		return (int)(c->pTail_tx - c->pHead_tx);
-	} else
-	{
-		return 256 - (int)(c->pHead_tx - c->pTail_tx);
-	}
-}
-
 static void startTX(Client* c, bool timeout, bool kickstart, bool ack)
 {
 	static volatile uint8_t txState = TX_IDLE;
 	static int packetLength;
 
-    if (timeout)
-    {
-        if (txState == TX_WAIT)
-        {
-            // Ack did not arrive in time, resend last pub
-            txState = TX_IDLE;
-        } else
-        {
-            return;
-        }
-    }
+	// If we are waiting for an Ack and a timeout occured
+	// we resend the last publish packet.
+	if (timeout)
+	{
+		if (txState == TX_WAIT)
+		{
+			// Ack did not arrive in time, resend last pub
+			txState = TX_IDLE;
+		} else
+		{
+			return;
+		}
+	}
 
-    if (kickstart && (txState != TX_IDLE))
-    {
-        return;
-    }
+	// If we write to the tx buffer and the uart is idling
+	// we should initiate the transmit process.
+	if (kickstart && (txState != TX_IDLE))
+	{
+		return;
+	}
 
-    if (ack && (txState == TX_WAIT))
-    {
-    	c->pHead_tx += (uint8_t)packetLength;
-    	c->txFull = false;
-        txState = TX_IDLE;
-    }
+	// If we received an Ack, move on.
+	if (ack && (txState == TX_WAIT))
+	{
+		c->txBuf.pH += (uint8_t)packetLength;
+		c->txBuf.isFull = false;
+		txState = TX_IDLE;
+	}
 
 	switch (txState)
 	{
 	// Start sending the next packet
 	case TX_IDLE:
-		if (tx_available(c) > 0)
+		if (c->txBuf.available(&c->txBuf) > 0)
 		{
-			packetLength = (int)c->txBuffer[c->pHead_tx] + 1;
-			if ((int)c->pHead_tx + packetLength > 256) // check if packet surpasses buffer end
+			packetLength = (int)(c->txBuf.Buf[c->txBuf.pH]) + 1;
+			if ((int)c->txBuf.pH + packetLength > 256) // check if packet surpasses buffer end
 			{
-				if (HAL_UART_Transmit_IT(c->peripheral_UART, &c->txBuffer[c->pHead_tx], 256 - c->pHead_tx) != HAL_OK)
+				if (HAL_UART_Transmit_IT(c->peripheral_UART, &c->txBuf.Buf[c->txBuf.pH], 256 - c->txBuf.pH) != HAL_OK)
 					return; // TODO: react on this
 				c->lastOutAct = HAL_GetTick();
 				txState = TX_BUSY;
 			} else
 			{
-				if (HAL_UART_Transmit_IT(c->peripheral_UART, &c->txBuffer[c->pHead_tx], (uint16_t)packetLength) != HAL_OK)
+				if (HAL_UART_Transmit_IT(c->peripheral_UART, &c->txBuf.Buf[c->txBuf.pH], (uint16_t)packetLength) != HAL_OK)
 					return;
 				c->lastOutAct = HAL_GetTick();
-				if ((c->txBuffer[c->pHead_tx + 1] & 0x7F) == PROTOCOL_PUBLISH)
+				if ((c->txBuf.Buf[c->txBuf.pH + 1] & 0x7F) == PROTOCOL_PUBLISH)
 				{
-					c->expectedAckSeq = (c->txBuffer[c->pHead_tx + 1] & 0x80) > 0;
+					c->expectedAckSeq = (c->txBuf.Buf[c->txBuf.pH + 1] & 0x80) > 0;
 					c->ackOutstanding = true;
 					txState = TX_WAIT;
 				} else
 				{
-					c->pHead_tx += (uint8_t)packetLength;
+					c->txBuf.pH += (uint8_t)packetLength;
+					c->txBuf.isFull = false;
 				}
 			}
 		}
 		break;
 	// Complete sending of current packet
 	case TX_BUSY:
-		if (HAL_UART_Transmit_IT(c->peripheral_UART, c->txBuffer, packetLength + c->pHead_tx - 256) != HAL_OK)
+		if (HAL_UART_Transmit_IT(c->peripheral_UART, c->txBuf.Buf, packetLength + c->txBuf.pH - 256) != HAL_OK)
 			return;
 		c->lastOutAct = HAL_GetTick();
-		if ((c->txBuffer[c->pHead_tx + 1] & 0x7F) == PROTOCOL_PUBLISH)
+		if ((c->txBuf.Buf[c->txBuf.pH + 1] & 0x7F) == PROTOCOL_PUBLISH)
 		{
-			c->expectedAckSeq = (c->txBuffer[c->pHead_tx + 1] & 0x80) > 0;
+			c->expectedAckSeq = (c->txBuf.Buf[c->txBuf.pH + 1] & 0x80) > 0;
 			c->ackOutstanding = true;
 			txState = TX_WAIT;
 		} else
 		{
-			c->pHead_tx += (uint8_t)packetLength;
+			c->txBuf.pH += (uint8_t)packetLength;
 			txState = TX_IDLE;
+			c->txBuf.isFull = false;
 		}
 		break;
 	case TX_WAIT:
@@ -122,17 +114,17 @@ static bool writePacket(Client* c, uint8_t command, uint8_t* payload, uint8_t pL
 	c->workBuffer[pLength + 5] = (crcCode & 0xFF000000) >> 24;
 
 	// see if packet will fit in transmit buffer
-	if ((int)(pLength) + 6 > 256 - tx_available(c))
+	if ((int)(pLength) + 6 > 256 - c->txBuf.available(&c->txBuf))
 	{
 		return false;
 	}
 
-	// write packet into transmit buffer
+	// write packet into tx buffer
 	for (int i = 0; i < pLength + 6; i++)
 	{
-		c->txBuffer[c->pTail_tx++] = c->workBuffer[i];
+		c->txBuf.Buf[c->txBuf.pT++] = c->workBuffer[i];
 	}
-	c->txFull = (c->pTail_tx == c->pHead_tx);
+	c->txBuf.isFull = (c->txBuf.pT == c->txBuf.pH);
 
 	startTX(c, false, true, false);
 
@@ -179,9 +171,9 @@ static void rxHandlePacket(Client* c, uint8_t* packetStart)
 			{
 				for (uint8_t i = 0; i < packetStart[0] - 5; i++)
 				{
-					c->readBuffer[c->pRx_read++] = packetStart[2 + i];
+					c->readBuf.Buf[c->readBuf.pT++] = packetStart[2 + i];
 				}
-				c->readFull = (c->pRead_read == c->pRx_read);
+				c->readBuf.isFull = (c->readBuf.pH == c->readBuf.pT);
 			}
 		}
 		break;
@@ -192,7 +184,7 @@ static void rxHandlePacket(Client* c, uint8_t* packetStart)
 			if (rxSeqFlag == c->expectedAckSeq)
 			{
 				c->ackOutstanding = false;
-                startTX(c, false, false, true);
+				startTX(c, false, false, true);
 			}
 		}
 		break;
@@ -202,7 +194,7 @@ static void rxHandlePacket(Client* c, uint8_t* packetStart)
 // Callback hook ups
 void uartTxCompleteCallback(Client* c)
 {
-    startTX(c, false, false, false);
+	startTX(c, false, false, false);
 }
 
 // TODO: Packet RX timeout, buffer full check?
@@ -252,7 +244,7 @@ void tickInterupt(Client* c)
 		uint32_t now = HAL_GetTick();
 		if (now - c->lastOutAct > 500)
 		{
-            startTX(c, true, false, false);
+			startTX(c, true, false, false);
 		}
 	}
 }
@@ -262,17 +254,7 @@ static int availablePublic(const void* c)
 {
 	Client* self = (Client*)c;
 
-	if (self->readFull)
-	{
-		return 256;
-	}
-	if (self->pRx_read >= self->pRead_read)
-	{
-		return (int)(self->pRx_read - self->pRead_read);
-	} else
-	{
-		return 256 - (int)(self->pRead_read - self->pRx_read);
-	}
+	return self->readBuf.available(&self->readBuf);
 }
 
 static int readPublic(const void* c)
@@ -283,8 +265,8 @@ static int readPublic(const void* c)
 	{
 		return -1;
 	}
-	uint8_t ch = self->readBuffer[self->pRead_read++];
-	self->readFull = false;
+	uint8_t ch = self->readBuf.Buf[self->readBuf.pH++];
+	self->readBuf.isFull = false;
 	return ch;
 }
 
@@ -346,12 +328,8 @@ void newClient(Client* c, UART_HandleTypeDef* uartUnit, CRC_HandleTypeDef* crcUn
 	c->peripheral_UART = uartUnit;
 	c->peripheral_CRC = crcUnit;
 
-	c->pHead_tx = 0;
-	c->pTail_tx = 0;
-	c->txFull = false;
-	c->pRx_read = 0;
-	c->pRead_read = 0;
-	c->readFull = false;
+	newByteBuffer(&c->txBuf);
+	newByteBuffer(&c->readBuf);
 	c->ackOutstanding = false;
 	c->expectedAckSeq = false;
 	c->expectedRxSeqFlag = false;

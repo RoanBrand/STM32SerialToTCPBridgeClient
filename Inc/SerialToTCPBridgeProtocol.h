@@ -10,6 +10,7 @@
 
 #include <stdbool.h>
 #include "stm32f3xx_hal.h"
+#include "ByteBuffer.h"
 
 #define SERIAL_TIMEOUT 400
 
@@ -39,20 +40,11 @@ typedef struct Client_t
 	UART_HandleTypeDef* peripheral_UART;
 	CRC_HandleTypeDef* peripheral_CRC;
 
-	// Buffer for incoming uart data
-	uint8_t rxByte;
-	uint8_t rxBuffer[256];
+	uint8_t rxByte; // The latest received byte
 
-	// Buffer for outgoing uart data
-	uint8_t txBuffer[256];
-	uint8_t pHead_tx;
-	uint8_t pTail_tx;
-	bool txFull;
-
-	// buffer for app data to be read
-	uint8_t readBuffer[256];
-	uint8_t pRx_read, pRead_read;
-	bool readFull;
+	uint8_t rxBuffer[256]; // Buffer for incoming uart data (RX)
+	ByteBuffer txBuf; // Buffer for outgoing uart data (TX)
+	ByteBuffer readBuf; // Received App data to be read.
 
 	uint8_t workBuffer[128];
 	bool ackOutstanding;
