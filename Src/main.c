@@ -135,10 +135,10 @@ int main(void)
 
 	// MQTT Connection details
 	const char* id = "stm32BABY";
-	const char* user = "";
-	const char* pass = "";
-	const char* willTopic = "";
-	const char* willMsg = "";
+	const char* user = NULL;
+	const char* pass = NULL;
+	const char* willTopic = NULL;
+	const char* willMsg = NULL;
 
 	// MQTT Message info
 	const char* publishTopic = "stm32f334";
@@ -154,6 +154,7 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+	HAL_Delay(4000); // Wait 4s for power stabilization and usb enumeration.
 	while (1)
 	{
   /* USER CODE END WHILE */
